@@ -28,9 +28,10 @@
 
 std::vector<torch::Tensor> mylinear_forward(
     torch::Tensor input,
-    torch::Tensor weights) 
+    torch::Tensor weights,
+    torch::Tensor bias) 
 {
-    auto output = torch::mm(input, weights.transpose(0, 1));
+    auto output = torch::mm(input, weights.transpose(0, 1)) + bias;
     
     return {output};
 }
@@ -43,8 +44,8 @@ std::vector<torch::Tensor> mylinear_backward(
 {
     auto grad_input = torch::mm(grad_output, weights);
     auto grad_weights = torch::mm(grad_output.transpose(0, 1), input);
-
-    return {grad_input, grad_weights};
+    auto grad_bias = grad_output;
+    return {grad_input, grad_weights, grad_bias};
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {

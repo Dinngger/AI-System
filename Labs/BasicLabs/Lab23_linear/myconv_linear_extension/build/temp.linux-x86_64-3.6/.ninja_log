@@ -1,4 +1,0 @@
-# ninja log v5
-0	10686	1615907676330236146	/home/dinger/mine/UniversityClass/AI-System/Labs/BasicLabs/Lab23_linear/myconv_linear_extension/build/temp.linux-x86_64-3.6/mylinear.o	36a6012e48ce85b5
-0	11159	1615907687674067900	/home/dinger/mine/UniversityClass/AI-System/Labs/BasicLabs/Lab23_linear/myconv_linear_extension/build/temp.linux-x86_64-3.6/mylinear_cuda.o	41e4497bd52ab9fc
-0	20794	1615907697309925018	/home/dinger/mine/UniversityClass/AI-System/Labs/BasicLabs/Lab23_linear/myconv_linear_extension/build/temp.linux-x86_64-3.6/mylinear_cuda_kernel.o	a0b270c7e07d8910

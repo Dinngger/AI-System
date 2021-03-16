@@ -54,9 +54,26 @@ __global__ void matmul_kernel(
     }
 }
 
+template <typename scalar_t>
+__global__ void plus_kernel(
+    const scalar_t* A,
+    const scalar_t* B,
+    scalar_t* C,
+    const int M,
+    const int N) 
+{
+    const int row = blockIdx.x * blockDim.x + threadIdx.x;
+    const int col = blockIdx.y * blockDim.y + threadIdx.y;
+    if (row < M && col < N)
+    {
+        C[row * N + col]  = A[row * N + col] + B[row * N + col];
+    }
+}
+
 std::vector<torch::Tensor> mylinear_cuda_forward(
     torch::Tensor input,
-    torch::Tensor weights)
+    torch::Tensor weights,
+    torch::Tensor bias)
 {
     const int M = input.size(0);
     const int K = input.size(1);
@@ -77,6 +94,12 @@ std::vector<torch::Tensor> mylinear_cuda_forward(
             N,
             false,
             true);
+        plus_kernel<scalar_t><<<grid, block>>>(
+            input.data<scalar_t>(),
+            weights.data<scalar_t>(),
+            output.data<scalar_t>(),
+            M,
+            N);
         }));
     
     return {output};
@@ -123,5 +146,5 @@ std::vector<torch::Tensor> mylinear_cuda_backward(
             false);
         }));
     
-    return {grad_input, grad_weights};
+    return {grad_input, grad_weights, grad_output};
 }

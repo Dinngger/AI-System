@@ -37,18 +37,18 @@ import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 
-from mylinear import mylinear_cpp
+import mylinear_cpp
 import mylinear_cuda
 
 
 class myLinearFunctionPy(torch.autograd.Function):
     # Note that both forward and backward are @staticmethods
     @staticmethod
-    def forward(ctx, input, weight):
+    def forward(ctx, input, weight, bias):
         ctx.save_for_backward(input, weight)
-        output = input.mm(weight.t())
+        output = input.mm(weight.t()) + bias
         return output
-        
+
     @staticmethod
     def backward(ctx, grad_output):
         input, weight = ctx.saved_tensors
@@ -57,37 +57,38 @@ class myLinearFunctionPy(torch.autograd.Function):
         grad_input = grad_output.mm(weight)
         #if ctx.needs_input_grad[1]:
         grad_weight = grad_output.t().mm(input)
-        return grad_input, grad_weight
+        grad_bias = grad_output
+        return grad_input, grad_weight, grad_bias
 
 
 class myLinearFunctionCpp(torch.autograd.Function):
     # Note that both forward and backward are @staticmethods
     @staticmethod
-    def forward(ctx, input, weight):
+    def forward(ctx, input, weight, bias):
         ctx.save_for_backward(input, weight)
-        output = mylinear_cpp.forward(input, weight)
+        output = mylinear_cpp.forward(input, weight, bias)
         return output[0]
 
     @staticmethod
     def backward(ctx, grad_output):
         input, weight = ctx.saved_tensors
-        grad_input, grad_weight = mylinear_cpp.backward(grad_output, input, weight)
-        return grad_input, grad_weight
+        grad_input, grad_weight, grad_bias = mylinear_cpp.backward(grad_output, input, weight)
+        return grad_input, grad_weight, grad_bias
 
 
 class myLinearFunctionCuda(torch.autograd.Function):
     # Note that both forward and backward are @staticmethods
     @staticmethod
-    def forward(ctx, input, weight):
+    def forward(ctx, input, weight, bias):
         ctx.save_for_backward(input, weight)
-        output = mylinear_cuda.forward(input, weight)
+        output = mylinear_cuda.forward(input, weight, bias)
         return output[0]
 
     @staticmethod
     def backward(ctx, grad_output):
         input, weight = ctx.saved_tensors
-        grad_input, grad_weight = mylinear_cuda.backward(grad_output, input, weight)
-        return grad_input, grad_weight
+        grad_input, grad_weight, grad_bias= mylinear_cuda.backward(grad_output, input, weight)
+        return grad_input, grad_weight, grad_bias
 
 
 class myLinear(nn.Module):
@@ -97,9 +98,11 @@ class myLinear(nn.Module):
         self.output_features = output_features
         self.weight = nn.Parameter(torch.Tensor(output_features, input_features))
         self.weight.data.uniform_(-0.1, 0.1)
+        self.bias = nn.Parameter(torch.Tensor(output_features))
+        self.bias.data.uniform_(-0.1, 0.1)
     
     def forward(self, input):
-        return myLinearFunctionPy.apply(input, self.weight)
+        return myLinearFunctionCuda.apply(input, self.weight, self.bias)
 
 
 class Net(nn.Module):
@@ -110,8 +113,7 @@ class Net(nn.Module):
         self.dropout1 = nn.Dropout2d(0.25)
         self.dropout2 = nn.Dropout2d(0.5)
         self.fc1 = nn.Linear(9216, 128)
-        # self.fc2 = nn.Linear(128, 10)
-        self.fc2 = myLinear(128, 10)
+        self.fc2 = nn.Linear(128, 10)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -162,6 +164,27 @@ def test(model, device, test_loader):
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
 
+# Add profile function
+def profile(model, device, train_loader):
+    dataiter = iter(train_loader)
+    data, target = dataiter.next()
+    data, target = data.to(device), target.to(device)
+    with torch.autograd.profiler.profile(use_cuda=True) as prof:
+        model(data[0].reshape(1,1,28,28))
+    cpu_time_dict = dict()
+    gpu_time_dict = dict()
+    for function_event in prof.function_events:
+        gpu_time = function_event.kernels[0].interval.end - function_event.kernels[0].interval.start
+        cpu_time = function_event.cpu_interval.end - function_event.cpu_interval.start
+        if function_event.name in cpu_time_dict:
+            cpu_time_dict[function_event.name] += cpu_time
+            gpu_time_dict[function_event.name] += gpu_time
+        else:
+            cpu_time_dict[function_event.name] = cpu_time
+            gpu_time_dict[function_event.name] = gpu_time
+    cpu_sorted_time = sorted(cpu_time_dict.items(), key=lambda kv:(kv[1], kv[0]), reverse=True)
+    for kv in cpu_sorted_time:
+        print('{:30} cpu_time: {:.3f}us, gpu_time: {:.3f}us'.format(kv[0], kv[1], gpu_time_dict[kv[0]]))
 
 def main():
     # Training settings
@@ -211,6 +234,10 @@ def main():
     optimizer = optim.Adadelta(model.parameters(), lr=args.lr)
 
     scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
+    # profile model
+    print("Start profiling...")
+    profile(model, device, train_loader)
+    print("Finished profiling.")
     for epoch in range(1, args.epochs + 1):
         train(args, model, device, train_loader, optimizer, epoch)
         test(model, device, test_loader)

@@ -28,7 +28,8 @@
 // CUDA funciton declearition
 std::vector<torch::Tensor> mylinear_cuda_forward(
     torch::Tensor input,
-    torch::Tensor weights);
+    torch::Tensor weights,
+    torch::Tensor bias);
 
 std::vector<torch::Tensor> mylinear_cuda_backward(
     torch::Tensor grad_output,
@@ -43,12 +44,14 @@ std::vector<torch::Tensor> mylinear_cuda_backward(
 
 std::vector<torch::Tensor> mylinear_forward(
     torch::Tensor input,
-    torch::Tensor weights) 
+    torch::Tensor weights,
+    torch::Tensor bias) 
 {
     CHECK_INPUT(input);
     CHECK_INPUT(weights);
+    CHECK_INPUT(bias);
 
-    return mylinear_cuda_forward(input, weights);
+    return mylinear_cuda_forward(input, weights, bias);
 }
 
 std::vector<torch::Tensor> mylinear_backward(
