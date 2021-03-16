@@ -108,9 +108,22 @@ def profile(model, device, train_loader):
     dataiter = iter(train_loader)
     data, target = dataiter.next()
     data, target = data.to(device), target.to(device)
-    with torch.autograd.profiler.profile(use_cuda=False) as prof:
+    with torch.autograd.profiler.profile(use_cuda=True) as prof:
         model(data[0].reshape(1,1,28,28))
-    print(prof)
+    cpu_time_dict = dict()
+    gpu_time_dict = dict()
+    for function_event in prof.function_events:
+        gpu_time = function_event.kernels[0].interval.end - function_event.kernels[0].interval.start
+        cpu_time = function_event.cpu_interval.end - function_event.cpu_interval.start
+        if function_event.name in cpu_time_dict:
+            cpu_time_dict[function_event.name] += cpu_time
+            gpu_time_dict[function_event.name] += gpu_time
+        else:
+            cpu_time_dict[function_event.name] = cpu_time
+            gpu_time_dict[function_event.name] = gpu_time
+    cpu_sorted_time = sorted(cpu_time_dict.items(), key=lambda kv:(kv[1], kv[0]), reverse=True)
+    for kv in cpu_sorted_time:
+        print('{:30} cpu_time: {:.3f}us, gpu_time: {:.3f}us'.format(kv[0], kv[1], gpu_time_dict[kv[0]]))
 
 def main():
     # Training settings
