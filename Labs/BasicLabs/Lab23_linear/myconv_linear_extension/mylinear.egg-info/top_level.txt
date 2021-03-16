@@ -1,0 +1,2 @@
+mylinear_cpp
+mylinear_cuda
