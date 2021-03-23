@@ -1,0 +1,42 @@
+
+# 继承自哪个基础镜像
+FROM nvidia/cuda:10.2-cudnn7-devel-ubuntu18.04
+
+# 创建镜像中的文件夹，用于存储新的代码或文件
+RUN mkdir -p /src/app
+
+# WORKDIR指令设置Dockerfile中的任何RUN，CMD，ENTRPOINT，COPY和ADD指令的工作目录
+WORKDIR /src/app
+
+# 拷贝本地文件到Docker镜像中相应目录
+COPY pytorch_mnist_basic.py /src/app
+
+# 需要安装的依赖 
+
+RUN sed -i "s@http://.*archive.ubuntu.com@http://repo.huaweicloud.com@g" /etc/apt/sources.list
+RUN sed -i "s@http://.*security.ubuntu.com@http://repo.huaweicloud.com@g" /etc/apt/sources.list
+
+RUN --mount=type=cache,id=apt-dev,target=/var/cache/apt \
+    apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+    ca-certificates \
+    g++ \
+    python3-dev \
+    python3-distutils \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/* \
+    && cd /tmp \
+    && curl -O https://bootstrap.pypa.io/get-pip.py \
+    && python3 get-pip.py
+
+ENV PYTHONUNBUFFERED TRUE
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3 1 \
+    && update-alternatives --install /usr/local/bin/pip pip /usr/local/bin/pip3 1
+
+# This is only useful for cuda env
+RUN export USE_CUDA=1
+
+RUN pip install --no-cache-dir pip -U
+RUN pip config set global.index-url https://repo.huaweicloud.com/repository/pypi/simple
+RUN pip install --no-cache-dir torch torchvision
